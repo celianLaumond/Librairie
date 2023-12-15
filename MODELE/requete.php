@@ -18,68 +18,131 @@ function getcatalogue(){
     return $catalogue;
 }
 
-function findbook($titre, $auteur, $editeur, )
+function findbook($titre, $auteur, $editeur)
 {
-    $connexion = new PDO('mysql:host=localhost;dbname=abonne', 'root', 'root');
-    $requete = $connexion->prepare("SELECT livre.titre, auteur.nom AS auteur_nom, editeur.nom, emprunt.date_emprunt AS editeur_nom, emprunt.disponible
-FROM livre  
-JOIN auteur ON auteur.id = livre.auteur_id
-JOIN editeur ON editeur.id = livre.editeur_id
-JOIN emprunt ON emprunt.id_livre = livre.id
-WHERE livre.titre LIKE :titre AND auteur.nom LIKE :auteur AND editeur.nom LIKE :editeur 
-ORDER BY emprunt.date_emprunt DESC
-limit 1
+    try {
+        $connexion = new PDO('mysql:host=localhost;dbname=abonne', 'root', 'root');
 
-");
+        $query = "SELECT livre.titre, auteur.nom AS auteur_nom, editeur.nom AS editeur_nom, MAX(emprunt.date_emprunt) AS max_date_emprunt, emprunt.disponible
+                  FROM livre  
+                  JOIN auteur ON auteur.id = livre.auteur_id
+                  JOIN editeur ON editeur.id = livre.editeur_id
+                  JOIN emprunt ON emprunt.id_livre = livre.id
+                  WHERE emprunt.disponible = 1";
 
-// Associer les paramètres
-    $requete->bindParam(':titre', $titre, PDO::PARAM_STR);
-    $requete->bindParam(':auteur', $auteur, PDO::PARAM_STR);
-    $requete->bindParam(':editeur', $editeur, PDO::PARAM_STR);
+        // Add additional conditions based on user input
+        if (!empty($titre)) {
+            $query .= " AND livre.titre LIKE :titre";
+        }
 
+        if (!empty($auteur)) {
+            $query .= " AND auteur.nom LIKE :auteur";
+        }
 
-    $requete->execute();
+        if (!empty($editeur)) {
+            $query .= " AND editeur.nom LIKE :editeur";
+        }
 
-    $catalogue = $requete->fetchAll(PDO::FETCH_ASSOC);
+        $query .= " GROUP BY livre.titre, auteur_nom, editeur_nom, emprunt.disponible
+                   ORDER BY max_date_emprunt DESC";
 
-    $connexion = null;
+        $requete = $connexion->prepare($query);
 
-    return $catalogue;
+        // Bind parameters if they are provided
+        if (!empty($titre)) {
+            $requete->bindParam(':titre', $titre, PDO::PARAM_STR);
+        }
 
+        if (!empty($auteur)) {
+            $requete->bindParam(':auteur', $auteur, PDO::PARAM_STR);
+        }
 
+        if (!empty($editeur)) {
+            $requete->bindParam(':editeur', $editeur, PDO::PARAM_STR);
+        }
+
+        $requete->execute();
+
+        $catalogue = $requete->fetchAll(PDO::FETCH_ASSOC);
+
+        $connexion = null;
+
+        return $catalogue;
+    } catch (PDOException $e) {
+        // Handle database errors here (log, display, etc.)
+        die("Error: " . $e->getMessage());
+    }
 }
+
+
+
+
+
+
 
 function findSub($name, $surname, $country, $sub)
 {
     try {
         $connexion = new PDO('mysql:host=localhost;dbname=abonne', 'root', 'root');
 
-        // Utilisez des alias de table pour éviter les ambiguïtés dans les colonnes
-        $requete = $connexion->prepare("SELECT abonne.nom, abonne.prenom, abonne.ville, abonne.date_naissance, abonnement.date_abonnement, abonnement.date_expiration, abonnement.date_fin_abo
-        FROM abonne
-        INNER JOIN abonnement ON abonne.id = abonnement.abonne_id
-        WHERE abonne.nom LIKE :name AND abonne.prenom LIKE :surname AND abonne.ville LIKE :country AND abonnement.sub LIKE :sub
-        ");
+        // Base query
+        $query = "SELECT abonne.nom, abonne.prenom, abonne.ville, abonne.date_naissance, abonne.date_fin_abo
+                  FROM abonne
+                  WHERE 1";
 
-        // Liez les paramètres après avoir préparé la requête
-        $requete->bindParam(':name', $name, PDO::PARAM_STR);
-        $requete->bindParam(':surname', $surname, PDO::PARAM_STR);
-        $requete->bindParam(':country', $country, PDO::PARAM_STR);
-        $requete->bindParam(':sub', $sub, PDO::PARAM_STR);
+        // Check and append conditions for each provided parameter
+        if ($name !== '') {
+            $query .= " AND abonne.nom LIKE :name";
+        }
 
+        if ($surname !== '') {
+            $query .= " AND abonne.prenom LIKE :surname";
+        }
 
-        // Utilisez fetchAll après l'exécution de la requête
+        if ($country !== '') {
+            $query .= " AND abonne.ville LIKE :country";
+        }
+
+        if ($sub !== '') {
+            $query .= " AND abonne.sub LIKE :sub";
+        }
+
+        $requete = $connexion->prepare($query);
+
+        // Bind parameters if they are provided
+        if ($name !== '') {
+            $requete->bindParam(':name', $name, PDO::PARAM_STR);
+        }
+
+        if ($surname !== '') {
+            $requete->bindParam(':surname', $surname, PDO::PARAM_STR);
+        }
+
+        if ($country !== '') {
+            $requete->bindParam(':country', $country, PDO::PARAM_STR);
+        }
+
+        if ($sub !== '') {
+            $requete->bindParam(':sub', $sub, PDO::PARAM_STR);
+        }
+
+        // Execute the query
+        $requete->execute();
+
+        // Fetch results
         $catalogue = $requete->fetchAll(PDO::FETCH_ASSOC);
 
-        // Fermez la connexion après utilisation
+        // Close the connection
         $connexion = null;
 
         return $catalogue;
     } catch (PDOException $e) {
-        // Gérez les erreurs de base de données ici (log, affichage, etc.)
+        // Handle database errors here (log, display, etc.)
         die("Erreur: " . $e->getMessage());
     }
 }
+
+
     function findallsub(){
         $connexion = new PDO('mysql:host=localhost;dbname=abonne', 'root', 'root');
         $requete=$connexion->query('select * from abonne');
@@ -87,7 +150,7 @@ function findSub($name, $surname, $country, $sub)
         return $result;
     }
 
-function updateSub($id,$name, $surname, $country, $numberPostal, $adresse, $birth, $sub, $date_sub, $date_exp, $date_fin) {
+function updateSub($id, $name, $surname, $country, $numberPostal, $adresse, $birth, $sub, $date_inscription, $date_fin) {
     try {
         $connexion = new PDO('mysql:host=localhost;dbname=abonne', 'root', 'root');
 
@@ -99,10 +162,9 @@ function updateSub($id,$name, $surname, $country, $numberPostal, $adresse, $birt
                                             abonne.code_postal = :numberPostal,
                                             abonne.adresse = :adresse,
                                             abonne.date_naissance = :birth,
-                                            abonnement.sub = :sub,
-                                            abonnement.date_abonnement = :date_sub,
-                                            abonnement.date_expiration = :date_exp,
-                                            abonnement.date_fin_abo = :date_fin
+                                            abonne.sub = :sub,
+                                            abonne.date_inscription = :date_inscription,
+                                            abonne.date_fin_abo = :date_fin
                                         where abonne.id = :id
                                         ");
 
@@ -113,8 +175,8 @@ function updateSub($id,$name, $surname, $country, $numberPostal, $adresse, $birt
         $requete->bindParam(':adresse', $adresse, PDO::PARAM_STR);
         $requete->bindParam(':birth', $birth, PDO::PARAM_STR);
         $requete->bindParam(':sub', $sub, PDO::PARAM_STR);
-        $requete->bindParam(':date_sub', $date_sub, PDO::PARAM_STR);
-        $requete->bindParam(':date_exp', $date_exp, PDO::PARAM_STR);
+
+        $requete->bindParam(':date_inscription', $date_inscription, PDO::PARAM_STR);
         $requete->bindParam(':date_fin', $date_fin, PDO::PARAM_STR);
         $requete->bindParam(':id', $id, PDO::PARAM_STR);
 
@@ -122,12 +184,14 @@ function updateSub($id,$name, $surname, $country, $numberPostal, $adresse, $birt
 
         $connexion = null;
 
-        return true; // Ou vous pouvez retourner quelque chose pour indiquer le succès de la mise à jour
+        return true; // La mise à jour a réussi
     } catch (PDOException $e) {
         // Gérez les erreurs de base de données ici (log, affichage, etc.)
         die("Erreur: " . $e->getMessage());
         // Ou retournez quelque chose pour indiquer l'échec de la mise à jour
+        return false; // La mise à jour a échoué
     }
+
 
 
     }
@@ -192,7 +256,7 @@ function getInfoAbonne($idUtilisateur,$mot_de_passe) {
         $connexion = new PDO('mysql:host=localhost;dbname=abonne', 'root', 'root');
 
         // Préparez la requête SQL pour récupérer les informations de l'abonné
-        $query = "SELECT id_utilisateur, mot_de_passe,statut,email FROM utilisateur WHERE id_utilisateur = :id_utilisateur AND mot_de_passe = :mot_de_passe";
+        $query = "SELECT id_utilisateur, mot_de_passe,statut,email ,id_abonne FROM utilisateur WHERE id_utilisateur = :id_utilisateur AND mot_de_passe = :mot_de_passe";
 
         // Préparez la requête SQL avec PDO
         $stmt = $connexion->prepare($query);
@@ -240,10 +304,10 @@ WHERE livre.categorie =
 GROUP BY livre.titre
 ORDER BY COUNT(*) DESC
 LIMIT 5
-
         ");
 
-        $requete->bindParam(':id_abonne', $id_abonne, PDO::PARAM_INT);
+        // Correction du nom du paramètre
+        $requete->bindParam(':id', $id_abonne, PDO::PARAM_INT);
         $requete->execute();
 
         $resultat = $requete->fetchAll(PDO::FETCH_ASSOC);
@@ -257,3 +321,29 @@ LIMIT 5
         // Ou retournez quelque chose pour indiquer l'échec de la sélection
     }
 }
+function getBooksBorrowedByDate($id_abonne) {
+    try {
+        $connexion = new PDO('mysql:host=localhost;dbname=abonne', 'root', 'root');
+        $requete = $connexion->prepare("
+            SELECT livre.titre, emprunt.date_emprunt
+            FROM livre
+            JOIN emprunt ON emprunt.id_livre = livre.id
+            WHERE emprunt.id_abonne = :id
+            ORDER BY emprunt.date_emprunt DESC
+        ");
+
+        $requete->bindParam(':id', $id_abonne, PDO::PARAM_INT);
+        $requete->execute();
+
+        $resultat = $requete->fetchAll(PDO::FETCH_ASSOC);
+
+        $connexion = null;
+
+        return $resultat;
+    } catch (PDOException $e) {
+        // Gérez les erreurs de base de données ici (log, affichage, etc.)
+        die("Erreur: " . $e->getMessage());
+        // Ou retournez quelque chose pour indiquer l'échec de la sélection
+    }
+}
+
